@@ -1,6 +1,7 @@
 package com.application.todo.service;
 
 import com.application.todo.domain.tag.Tag;
+import com.application.todo.exceptions.TagNotFoundException;
 import com.application.todo.repository.TagRepository;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,8 @@ public class TagService {
     }
 
     public Mono<Tag> findById(final Long id) {
-        return Mono.defer(() -> this.tagRepository.findById(id)).subscribeOn(Schedulers.boundedElastic());
+        return Mono.defer(() -> this.tagRepository.findById(id)
+                        .switchIfEmpty(Mono.error(new TagNotFoundException(id))))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }
