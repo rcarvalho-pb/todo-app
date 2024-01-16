@@ -2,6 +2,7 @@ package com.application.todo.domain.tag;
 
 import com.application.todo.domain.tag.dto.TagDTO;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
@@ -20,6 +21,7 @@ import java.time.LocalDateTime;
 @Setter
 @ToString
 @Accessors(chain = true)
+@NoArgsConstructor
 public class Tag {
 
     @Id

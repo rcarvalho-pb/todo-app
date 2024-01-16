@@ -5,6 +5,7 @@ import com.application.todo.domain.person.dto.PersonDTO;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
@@ -21,6 +22,7 @@ import java.time.LocalDateTime;
 @Setter
 @ToString
 @Accessors(chain = true)
+@NoArgsConstructor
 public class Person {
 
     @Id

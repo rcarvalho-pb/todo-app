@@ -12,7 +12,7 @@ import reactor.core.scheduler.Schedulers;
 @Service
 public class PersonService {
 
-    private static final Sort DEFAULT_SORT = Sort.by(Sort.Order.by("first_name, last_name"));
+    private static final Sort DEFAULT_SORT = Sort.by(Sort.Order.by("first_name"));
     private final PersonRepository personRepository;
 
     public PersonService(PersonRepository personRepository) {

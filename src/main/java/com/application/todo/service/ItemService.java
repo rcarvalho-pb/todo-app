@@ -9,6 +9,7 @@ import com.application.todo.repository.ItemRepository;
 import com.application.todo.repository.ItemTagRepository;
 import com.application.todo.repository.PersonRepository;
 import com.application.todo.repository.TagRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ import reactor.util.function.Tuple2;
 
 import java.util.Collection;
 
+@Slf4j
 @Service
 public class ItemService {
 
@@ -36,21 +38,34 @@ public class ItemService {
     }
 
     public Flux<Item> findAll() {
-        return Flux.defer(() -> this.itemRepository.findAll(DEFAULT_SORT).flatMap(this::loadRelations))
-                .subscribeOn(Schedulers.boundedElastic());
+        log.info("Finding all items");
+        return Flux.defer(() -> {
+                return this.itemRepository.findAll(DEFAULT_SORT).flatMap(item -> {
+                    log.info("{}", item);
+                    Mono<Item> res = this.loadRelations(item);
+                    res.subscribe(System.out::println);
+                    return res;
+                });
+            })
+            .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Transactional
     public Mono<Item> create(Item item) {
+        log.info("Create item in ItemService: Item - {}", item);
         if (item.getId() != null || item.getVersion() != null) {
             return Mono.error(new IllegalArgumentException("when creating an item, the id and the version must be null"));
         }
 
         return Mono.defer(() -> this.itemRepository.save(item).flatMap(savedItem -> {
-            this.tagRepository.saveAll(savedItem.getTags());
-            return this.itemTagRepository.saveAll(savedItem.getTags().stream()
-                    .map(tag -> new ItemTag(savedItem.getId(), tag.getId())).toList())
-                    .then(Mono.just(savedItem));
+            log.info("saved item - {}", savedItem);
+            if (savedItem.getTags() != null) {
+                log.info("here");
+                Flux<Tag> savedTags = this.tagRepository.saveAll(savedItem.getTags());
+                return savedTags.flatMap(tag -> this.itemTagRepository.save(new ItemTag(savedItem.getId(), tag.getId())))
+                        .then(Mono.just(savedItem));
+            }
+            return Mono.just(savedItem);
         })).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -107,11 +122,13 @@ public class ItemService {
     }
 
     private Mono<Item> loadRelations(final Item item) {
-        Mono<Item> mono = Mono.just(item)
+        Flux<ItemTag> itemTagMono = this.itemTagRepository.findAllByItemId(item.getId());
+        Mono<Item> mono = Mono.just(item);
+        if (itemTagMono != null) mono = mono
                 .zipWith(tagRepository.findTagsByItemId(item.getId()).collectList())
                 .map(res -> res.getT1().setTags(res.getT2()));
 
-        if (item.getAssignee() != null) mono = mono
+        if (item.getAssigneeId() != null) mono = mono
                 .zipWith(this.personRepository.findById(item.getAssigneeId()))
                 .map(res -> res.getT1().setAssignee(res.getT2()));
 

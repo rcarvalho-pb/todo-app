@@ -24,8 +24,6 @@ import java.util.Optional;
 @Data
 @Accessors(chain = true)
 @NoArgsConstructor
-@Builder
-@AllArgsConstructor
 public class Item {
 
     @Id
@@ -41,6 +39,7 @@ public class Item {
     @NotNull
     private ItemStatus status = ItemStatus.TODO;
 
+    @Transient
     private Long assigneeId;
 
     @Transient
