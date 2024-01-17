@@ -66,10 +66,10 @@ public class Item {
         if (dto.status().isPresent()) this.status = dto.status().get();
         if (dto.assignee().isPresent()) this.assignee = new Person(dto.assignee().get());
         if (dto.tags().isPresent()) this.tags = dto.tags().get();
-        if (dto.createdDate().isPresent()) this.createdDate = dto.createdDate().get();
-        else this.createdDate = LocalDateTime.now();
-        if (dto.lastModifiedDate().isPresent()) this.lastModifiedDate = dto.lastModifiedDate().get();
-        else this.lastModifiedDate = LocalDateTime.now();
+//        if (dto.createdDate().isPresent()) this.createdDate = dto.createdDate().get();
+//        else this.createdDate = LocalDateTime.now();
+//        if (dto.lastModifiedDate().isPresent()) this.lastModifiedDate = dto.lastModifiedDate().get();
+//        else this.lastModifiedDate = LocalDateTime.now();
     }
 
     public static ItemDTO toDTO(Item item) {
