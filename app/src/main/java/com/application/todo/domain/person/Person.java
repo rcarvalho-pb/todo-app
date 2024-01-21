@@ -49,8 +49,6 @@ public class Person {
         this.id = personDTO.id();
         this.firstName = personDTO.firstName();
         this.lastName = personDTO.lastName();
-        this.createdDate = LocalDateTime.now();
-        this.lastModifiedDate = LocalDateTime.now();
     }
 
     public static PersonDTO toDTO(Person person) {

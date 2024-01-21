@@ -30,4 +30,9 @@ public class PersonService {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
+    public Mono<Person> create(Person person) {
+        return Mono.defer(() -> this.personRepository.save(person))
+            .subscribeOn(Schedulers.boundedElastic());
+    }
+
 }

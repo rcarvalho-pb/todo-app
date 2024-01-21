@@ -13,6 +13,9 @@ import reactor.core.scheduler.Schedulers;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 import static org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+
 
 @RestController
 @RequestMapping("people")
@@ -35,4 +38,11 @@ public class PersonController {
         return Flux.defer(() -> this.personService.findAll().map(Person::toDTO))
                 .subscribeOn(Schedulers.parallel());
     }
+
+    @PostMapping
+    public Mono<PersonDTO> create(@RequestBody final PersonDTO person) {
+        return Mono.defer(() -> this.personService.create(new Person(person)).map(Person::toDTO))
+            .subscribeOn(Schedulers.parallel());
+    }
+    
 }

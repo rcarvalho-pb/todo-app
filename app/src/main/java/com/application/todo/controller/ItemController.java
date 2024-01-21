@@ -25,27 +25,25 @@ public class ItemController {
 
     @PostMapping
     public Mono<ItemDTO> create(@RequestBody final ItemDTO itemDto) {
-        Item item = new Item(itemDto);
-        log.info("{}", item);
         return Mono.defer(() -> this.itemService.create(new Item(itemDto)).map(Item::toDTO))
                 .subscribeOn(Schedulers.parallel());
     }
 
     @PutMapping(value = "/{id}")
     public Mono<ItemDTO> update(@PathVariable final Long id, @RequestHeader(value = HttpHeaders.IF_MATCH) final Long version, @RequestBody final ItemDTO itemDTO) {
-        return Mono.defer(() -> this.itemService.findById(id, version, false)
-                        .flatMap(this.itemService::update)
-                        .map(Item::toDTO))
+        log.info("Update");
+        log.info("{}", itemDTO);
+        return Mono.defer(() -> this.itemService.update(id, version, new Item(itemDTO)).map(Item::toDTO))
                 .subscribeOn(Schedulers.parallel());
     }
 
-    @PatchMapping(value = "/{id}")
-    public Mono<ItemDTO> patch(@PathVariable final Long id, @RequestHeader(value = HttpHeaders.IF_MATCH) final Long version, @RequestBody final ItemDTO itemDTO) {
-        return Mono.defer(() -> this.itemService.findById(id, version, true)
-                        .flatMap(this.itemService::update)
-                        .map(Item::toDTO))
-                .subscribeOn(Schedulers.parallel());
-    }
+    // @PatchMapping(value = "/{id}")
+    // public Mono<ItemDTO> patch(@PathVariable final Long id, @RequestHeader(value = HttpHeaders.IF_MATCH) final Long version, @RequestBody final ItemDTO itemDTO) {
+    //     return Mono.defer(() -> this.itemService.findById(id, version, true)
+    //                     .flatMap(this.itemService::update)
+    //                     .map(Item::toDTO))
+    //             .subscribeOn(Schedulers.parallel());
+    // }
 
     @GetMapping(value = "/{id}")
     public Mono<ItemDTO> findById(@PathVariable final Long id) {

@@ -39,7 +39,6 @@ public class Item {
     @NotNull
     private ItemStatus status = ItemStatus.TODO;
 
-    @Transient
     private Long assigneeId;
 
     @Transient
@@ -64,6 +63,7 @@ public class Item {
         if (dto.version().isPresent()) this.version = dto.version().get();
         if (dto.description().isPresent()) this.description = dto.description().get();
         if (dto.status().isPresent()) this.status = dto.status().get();
+        if (dto.assigneeId().isPresent()) this.assigneeId = dto.assigneeId().get();
         if (dto.assignee().isPresent()) this.assignee = new Person(dto.assignee().get());
         if (dto.tags().isPresent()) this.tags = dto.tags().get();
 //        if (dto.createdDate().isPresent()) this.createdDate = dto.createdDate().get();
