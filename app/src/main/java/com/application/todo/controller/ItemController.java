@@ -3,7 +3,6 @@ package com.application.todo.controller;
 import com.application.todo.domain.item.Item;
 import com.application.todo.domain.item.dto.ItemDTO;
 import com.application.todo.service.ItemService;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
@@ -14,7 +13,6 @@ import static org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE;
 
 @RestController
 @RequestMapping("items")
-@Slf4j
 public class ItemController {
 
     private final ItemService itemService;
@@ -30,9 +28,7 @@ public class ItemController {
     }
 
     @PutMapping(value = "/{id}")
-    public Mono<ItemDTO> update(@PathVariable final Long id, @RequestHeader(value = HttpHeaders.IF_MATCH) final Long version, @RequestBody final ItemDTO itemDTO) {
-        log.info("Update");
-        log.info("{}", itemDTO);
+    public Mono<ItemDTO> update(@PathVariable("id") final Long id, @RequestHeader(value = HttpHeaders.IF_MATCH) final Long version, @RequestBody final ItemDTO itemDTO) {
         return Mono.defer(() -> this.itemService.update(id, version, new Item(itemDTO)).map(Item::toDTO))
                 .subscribeOn(Schedulers.parallel());
     }

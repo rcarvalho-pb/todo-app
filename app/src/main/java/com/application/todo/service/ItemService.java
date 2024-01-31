@@ -1,6 +1,7 @@
 package com.application.todo.service;
 
 import java.util.List;
+import java.util.ArrayList;
 
 import com.application.todo.domain.item.Item;
 import com.application.todo.domain.itemperson.ItemPerson;
@@ -75,21 +76,36 @@ public class ItemService {
 
     @Transactional
     public Mono<Item> update(final Long id, final Long version, final Item item) {
-        log.info("{}", item);
         if (item.getId() == null || item.getVersion() == null) {
             return Mono.error(new IllegalArgumentException("When updating an item, id and version must not be null"));
         }
 
         return Mono.defer(() -> this.verifyExistence(id)
-            .then(this.itemPersonRepository.findByItemId(id))
-            .flatMap(i -> {
-                if(i != null) return this.itemPersonRepository.delete(i);
-                return Mono.empty();
+            .then(this.itemPersonRepository.findById(id))
+            .flatMap(itemPerson -> {
+                if (item.getAssigneeId() != null && itemPerson.getPersonId() != item.getAssigneeId()) {
+                    itemPerson.setPersonId(item.getAssigneeId());
+                    return this.itemPersonRepository.save(itemPerson);
+                }
+                return Mono.just(itemPerson);
             })
-            .then(Mono.empty()))
-            .flatMap(i -> {
-                if(item.getAssigneeId() != null) return this.itemPersonRepository.save(new ItemPerson(item.getId(), item.getAssigneeId()));
-                return Mono.empty();
+            .then(Mono.just(item.getTags()))
+            .flatMap(tags -> {
+                return this.tagRepository.saveAll(tags.stream().filter(t -> t.getId() == null).toList()).collectList();
+            })
+            .flatMap(tags -> {
+                List<ItemTag> itemTags = tags.stream().map(t -> new ItemTag(item.getId(), t.getId())).toList();
+                return this.itemTagRepository.saveAll(itemTags).collectList();
+            })
+            .then(this.tagRepository.findTagsByItemId(id).collectList())
+            .log()
+            .flatMap(tags -> {
+                List<Tag> changedTags = tags.stream().filter(t -> item.getTags().contains(t)).map(t -> {
+                    t.setName(item.getTags().get(Integer.parseInt(t.getId().toString())).getName());
+                    return t;
+                }).toList();
+                log.info("Tags changed - {}", changedTags);
+                return this.tagRepository.saveAll(changedTags).collectList();
             })
             .then(this.itemTagRepository.findAllByItemId(id).collectList())
             .flatMap(itemTags -> {
@@ -109,27 +125,24 @@ public class ItemService {
                         .map(tagId -> new ItemTag(item.getId(), tagId))
                         .toList();
                 
-                log.info("existingTagsId - {}", existingTagsId);
-                log.info("tagIdsToSave - {}", tagIdsToSave);
-                log.info("removedItemTags - {}", removedItemTags);
-                log.info("addedItemTags - {}", addedItemTags);
+                List<Tag> tagToRemove = new ArrayList<>();
 
+                this.tagRepository.findTagsByItemId(id).filter(tag -> removedItemTags.stream().anyMatch(it -> tag.getId() == it.getTagId())).subscribe(tagToRemove::add);
+                
                 return this.itemTagRepository.deleteAll(removedItemTags)
-                .then(this.itemTagRepository.saveAll(addedItemTags).collectList());
+                .then(this.tagRepository.deleteAll(tagToRemove))
+                .then(Mono.just(addedItemTags));
             })
-            .then(this.tagRepository.findAllById(item.getTags().stream().map(Tag::getId).toList()).collectList())
-            .flatMap(tags -> {
-                log.info("Tags - {}", tags);
-                return this.tagRepository.saveAll(item.getTags()).collectList();
-            })
+            .flatMap(itemtags -> this.itemTagRepository.saveAll(itemtags).collectList())
             .then(this.itemRepository.findById(id))
             .flatMap(i -> {
-                if(item.getStatus() != null) i.setStatus(item.getStatus());
-                if(item.getDescription() != null) i.setDescription(item.getDescription());
-                if(i.getAssigneeId() != null && i.getAssigneeId() != item.getAssigneeId()) i.setAssigneeId(item.getAssigneeId());
-
+                if (item.getAssigneeId() != null) i.setAssigneeId(item.getAssigneeId());
+                if (item.getStatus() != null) i.setStatus(item.getStatus());
+                if (item.getDescription() != null) i.setDescription(item.getDescription());
                 return this.itemRepository.save(i).flatMap(this::loadRelations);
             })
+            
+        )
         .subscribeOn(Schedulers.boundedElastic());
     }
 
