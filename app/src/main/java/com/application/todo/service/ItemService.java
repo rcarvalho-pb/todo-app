@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import com.application.todo.domain.item.Item;
 import com.application.todo.domain.itemperson.ItemPerson;
 import com.application.todo.domain.itemtag.ItemTag;
+import com.application.todo.domain.notification.NotificationTopic;
 import com.application.todo.domain.tag.Tag;
 import com.application.todo.exceptions.ItemNotFoundException;
 import com.application.todo.exceptions.UnexpectedItemVersionException;
@@ -36,13 +37,15 @@ public class ItemService {
     private final ItemTagRepository itemTagRepository;
     private final TagRepository tagRepository;
     private final ItemPersonRepository itemPersonRepository;
+    private final NotificationService notificationService;
 
-    public ItemService(ItemRepository itemRepository, PersonRepository personRepository, ItemTagRepository itemTagRepository, TagRepository tagRepository, ItemPersonRepository itemPersonRepository) {
+    public ItemService(ItemRepository itemRepository, PersonRepository personRepository, ItemTagRepository itemTagRepository, TagRepository tagRepository, ItemPersonRepository itemPersonRepository, NotificationService notificationService) {
         this.itemRepository = itemRepository;
         this.personRepository = personRepository;
         this.itemTagRepository = itemTagRepository;
         this.tagRepository = tagRepository;
         this.itemPersonRepository = itemPersonRepository;
+        this.notificationService = notificationService;
     }
 
     public Flux<Item> findAll() {
@@ -81,69 +84,72 @@ public class ItemService {
         }
 
         return Mono.defer(() -> this.verifyExistence(id)
-            .then(this.itemPersonRepository.findById(id))
-            .flatMap(itemPerson -> {
-                if (item.getAssigneeId() != null && itemPerson.getPersonId() != item.getAssigneeId()) {
-                    itemPerson.setPersonId(item.getAssigneeId());
-                    return this.itemPersonRepository.save(itemPerson);
-                }
-                return Mono.just(itemPerson);
-            })
-            .then(Mono.just(item.getTags()))
-            .flatMap(tags -> {
-                return this.tagRepository.saveAll(tags.stream().filter(t -> t.getId() == null).toList()).collectList();
-            })
-            .flatMap(tags -> {
-                List<ItemTag> itemTags = tags.stream().map(t -> new ItemTag(item.getId(), t.getId())).toList();
-                return this.itemTagRepository.saveAll(itemTags).collectList();
-            })
-            .then(this.tagRepository.findTagsByItemId(id).collectList())
-            .log()
-            .flatMap(tags -> {
-                List<Tag> changedTags = tags.stream().filter(t -> item.getTags().contains(t)).map(t -> {
-                    t.setName(item.getTags().get(Integer.parseInt(t.getId().toString())).getName());
-                    return t;
-                }).toList();
-                log.info("Tags changed - {}", changedTags);
-                return this.tagRepository.saveAll(changedTags).collectList();
-            })
-            .then(this.itemTagRepository.findAllByItemId(id).collectList())
-            .flatMap(itemTags -> {
-                final Collection<Long> existingTagsId = itemTags.stream()
-                            .map(ItemTag::getTagId)
-                            .toList();
-                final Collection<Long> tagIdsToSave = item.getTags().stream()
-                        .map(Tag::getId)
-                        .toList();
+                        .then(this.itemPersonRepository.findById(id))
+                        .flatMap(itemPerson -> {
+                            if (item.getAssigneeId() != null && itemPerson.getPersonId() != item.getAssigneeId()) {
+                                itemPerson.setPersonId(item.getAssigneeId());
+                                return this.itemPersonRepository.save(itemPerson);
+                            }
+                            return Mono.just(itemPerson);
+                        })
+                        .then(Mono.just(item.getTags()))
+                        .flatMap(tags -> {
+                            return this.tagRepository.saveAll(tags.stream().filter(t -> t.getId() == null).toList()).collectList();
+                        })
+                        .flatMap(tags -> {
+                            List<ItemTag> itemTags = tags.stream().map(t -> new ItemTag(item.getId(), t.getId())).toList();
+                            return this.itemTagRepository.saveAll(itemTags).collectList();
+                        })
+                        .then(this.tagRepository.findTagsByItemId(id).collectList())
+                        .flatMap(tags -> {
+                            List<Tag> tagsToSave = tags.stream()
+                                    .filter(tag -> item.getTags().stream().anyMatch(t -> t.getId() == tag.getId()))
+                                    .map(tag -> {
+                                        String name = item.getTags().stream().filter(t -> t.getId() == tag.getId()).findFirst().get().getName();
+                                        tag.setName(name);
+                                        log.info("Name - {}", name);
+                                        return tag;
+                                    })
+                                    .toList();
+                            return this.tagRepository.saveAll(tagsToSave).collectList();
+                        })
+                        .then(this.itemTagRepository.findAllByItemId(id).collectList())
+                        .flatMap(itemTags -> {
+                            final Collection<Long> existingTagsId = itemTags.stream()
+                                    .map(ItemTag::getTagId)
+                                    .toList();
+                            final Collection<Long> tagIdsToSave = item.getTags().stream()
+                                    .map(Tag::getId)
+                                    .toList();
 
-                final Collection<ItemTag> removedItemTags = itemTags.stream()
-                        .filter(itemTag -> !tagIdsToSave.contains(itemTag.getTagId()))
-                        .toList();
+                            final Collection<ItemTag> removedItemTags = itemTags.stream()
+                                    .filter(itemTag -> !tagIdsToSave.contains(itemTag.getTagId()))
+                                    .toList();
 
-                final Collection<ItemTag> addedItemTags = tagIdsToSave.stream()
-                        .filter(tagid -> !existingTagsId.contains(tagid))
-                        .map(tagId -> new ItemTag(item.getId(), tagId))
-                        .toList();
-                
-                List<Tag> tagToRemove = new ArrayList<>();
+                            final Collection<ItemTag> addedItemTags = tagIdsToSave.stream()
+                                    .filter(tagid -> !existingTagsId.contains(tagid))
+                                    .map(tagId -> new ItemTag(item.getId(), tagId))
+                                    .toList();
 
-                this.tagRepository.findTagsByItemId(id).filter(tag -> removedItemTags.stream().anyMatch(it -> tag.getId() == it.getTagId())).subscribe(tagToRemove::add);
-                
-                return this.itemTagRepository.deleteAll(removedItemTags)
-                .then(this.tagRepository.deleteAll(tagToRemove))
-                .then(Mono.just(addedItemTags));
-            })
-            .flatMap(itemtags -> this.itemTagRepository.saveAll(itemtags).collectList())
-            .then(this.itemRepository.findById(id))
-            .flatMap(i -> {
-                if (item.getAssigneeId() != null) i.setAssigneeId(item.getAssigneeId());
-                if (item.getStatus() != null) i.setStatus(item.getStatus());
-                if (item.getDescription() != null) i.setDescription(item.getDescription());
-                return this.itemRepository.save(i).flatMap(this::loadRelations);
-            })
-            
-        )
-        .subscribeOn(Schedulers.boundedElastic());
+                            List<Tag> tagToRemove = new ArrayList<>();
+
+                            this.tagRepository.findTagsByItemId(id).filter(tag -> removedItemTags.stream().anyMatch(it -> tag.getId() == it.getTagId())).subscribe(tagToRemove::add);
+
+                            return this.itemTagRepository.deleteAll(removedItemTags)
+                                    .then(this.tagRepository.deleteAll(tagToRemove))
+                                    .then(Mono.just(addedItemTags));
+                        })
+                        .flatMap(itemtags -> this.itemTagRepository.saveAll(itemtags).collectList())
+                        .then(this.itemRepository.findById(id))
+                        .flatMap(i -> {
+                            if (item.getAssigneeId() != null) i.setAssigneeId(item.getAssigneeId());
+                            if (item.getStatus() != null) i.setStatus(item.getStatus());
+                            if (item.getDescription() != null) i.setDescription(item.getDescription());
+                            return this.itemRepository.save(i).flatMap(this::loadRelations);
+                        })
+
+                )
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Transactional
@@ -185,5 +191,14 @@ public class ItemService {
             if (Boolean.FALSE.equals(exists)) sink.error(new ItemNotFoundException(id));
             else sink.next(exists);
         });
+    }
+
+    public Flux<Item> listenToSavedItem() {
+        return this.notificationService.listen(NotificationTopic.ITEM_SAVED, Item.class)
+            .flatMap(this::loadRelations);
+    }
+
+    public Flux<Long> listenToDeletedItems() {
+        return this.notificationService.listen(NotificationTopic.ITEM_DELETED, Item.class).map(Item::getId);
     }
 }

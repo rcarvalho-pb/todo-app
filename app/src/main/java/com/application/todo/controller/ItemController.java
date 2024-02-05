@@ -1,15 +1,21 @@
 package com.application.todo.controller;
 
+import com.application.todo.domain.event.Event;
+import com.application.todo.domain.event.ItemDeleted;
+import com.application.todo.domain.event.ItemSaved;
 import com.application.todo.domain.item.Item;
 import com.application.todo.domain.item.dto.ItemDTO;
 import com.application.todo.service.ItemService;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import static org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE;
+
+import java.time.Duration;
 
 @RestController
 @RequestMapping("items")
@@ -51,5 +57,17 @@ public class ItemController {
     public Flux<ItemDTO> findAll() {
         return Flux.defer(() -> this.itemService.findAll().map(Item::toDTO))
                 .subscribeOn(Schedulers.parallel());
+    }
+
+    @GetMapping(value = "events")
+    public Flux<ServerSentEvent<Event>> listenToEvent() {
+        final Flux<Event> itemSavedFlux = this.itemService.listenToSavedItem().map(ItemSaved::new);
+
+        final Flux<Event> itemDeletedFlux = this.itemService.listenToDeletedItems().map(ItemDeleted::new);
+
+        return Flux.merge(itemSavedFlux, itemDeletedFlux).map(e -> ServerSentEvent.<Event>builder()
+        .retry(Duration.ofSeconds(4L))
+        .event(e.getClass().getSimpleName())
+        .data(e).build());
     }
 }

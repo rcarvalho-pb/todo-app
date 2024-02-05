@@ -1,6 +1,5 @@
 package com.application.todo.config;
 
-import lombok.extern.slf4j.Slf4j;
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.flyway.FlywayProperties;
@@ -8,11 +7,16 @@ import org.springframework.boot.autoconfigure.r2dbc.R2dbcProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.r2dbc.config.AbstractR2dbcConfiguration;
+import org.springframework.lang.NonNull;
+
+import io.r2dbc.postgresql.PostgresqlConnectionConfiguration;
+import io.r2dbc.postgresql.PostgresqlConnectionFactory;
+import io.r2dbc.spi.ConnectionFactory;
 
 @Configuration
 @EnableConfigurationProperties({ R2dbcProperties.class, FlywayProperties.class })
-@Slf4j
-public class DatabaseConfig {
+public class DatabaseConfig extends AbstractR2dbcConfiguration{
 
     @Value("${DB_NAME}")
     private String database;
@@ -40,5 +44,19 @@ public class DatabaseConfig {
                 .locations(flywayProperties.getLocations().toArray(String[]::new))
                 .baselineOnMigrate(true)
                 .load();
+    }
+
+    @Override
+    @Bean
+    @NonNull
+    public ConnectionFactory connectionFactory() {
+
+        return new PostgresqlConnectionFactory(PostgresqlConnectionConfiguration.builder()
+                .host(host)
+                .port(port)
+                .username(username)
+                .password(password)
+                .database(database)
+                .build());
     }
 }
